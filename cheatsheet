@@ -1,0 +1,100 @@
+library(SportsAnalytics) # contains player data for 17-18 NBA season
+library(scales) # allows percentage
+library(plyr) # allows 'arrange' function for sorting columns
+library(xlsx) # read xlsx files
+
+
+#### 16-17 Data Frames ####
+
+# store it
+raw <- lastseason
+#raw <- data.frame(fetch_NBAPlayerStatistics("16-17"))
+
+# create data frame for 16-17 season player data
+lastseason <- raw
+
+
+lastseason <- arrange(lastseason, desc(TotalMinutesPlayed)) # arrange by total minutes played
+lastseason <- lastseason[which(lastseason$Team != "NA"),] #removes players without a team
+lastseason <- droplevels.data.frame(lastseason) # remove NA from levels
+
+# create data frame for 16-17 team data
+teamdata <- data.frame(read.xlsx("/Users/John/Desktop/Fantasy Basketball/1617teamstats.xlsx", 1))
+
+
+
+
+##### Cheat Sheet for Basic Stats #####
+
+# create cheat sheet df
+pergame1617 <- lastseason[c(2,3,5)]
+
+# create columns for basic per game stats
+pergame1617$Minutes <- round(lastseason$TotalMinutesPlayed/lastseason$GamesPlayed, digits=2)
+pergame1617$Points <- round(lastseason$TotalPoints/lastseason$GamesPlayed, digits=2)
+pergame1617$FieldGoalsAttempted <- round(lastseason$FieldGoalsAttempted/lastseason$GamesPlayed, digits=2)
+pergame1617$FreeThrowsAttempted <- round(lastseason$FreeThrowsAttempted/lastseason$GamesPlayed, digits=2)
+
+pergame1617$ThreesMade <- round(lastseason$ThreesMade/lastseason$GamesPlayed, digits=2)
+pergame1617$Rebounds <- round(lastseason$TotalRebounds/lastseason$GamesPlayed, digits=2)
+pergame1617$Assists <- round(lastseason$Assists/lastseason$GamesPlayed, digits=2)
+pergame1617$Steals <- round(lastseason$Steals/lastseason$GamesPlayed, digits=2)
+pergame1617$Blocks <- round(lastseason$Blocks/lastseason$GamesPlayed, digits=2)
+pergame1617$Turnovers <- round(lastseason$Turnovers/lastseason$GamesPlayed, digits=2)
+
+# create columns for efficiency stats
+pergame1617$FGPercent <- percent(lastseason$FieldGoalsMade/lastseason$FieldGoalsAttempted)
+pergame1617$FTPercent <- percent(lastseason$FreeThrowsMade/lastseason$FreeThrowsAttempted)
+
+# create columns for team stats (to allow advanced calculations)
+pergame1617$TeamRebounds <- teamdata[match(pergame1617$Team, teamdata$Team), 7] #for rebound rate
+pergame1617$TeamMinutes <- teamdata[match(pergame1617$Team, teamdata$Team), 2] #for usage
+pergame1617$TeamFieldGoalsAttempted <- teamdata[match(pergame1617$Team, teamdata$Team), 4] #for usage
+pergame1617$TeamFreeThrowsAttempted <- teamdata[match(pergame1617$Team, teamdata$Team), 6] #for usage
+pergame1617$TeamTurnovers <- teamdata[match(pergame1617$Team, teamdata$Team), 11] #for usage
+
+
+##### Cheat Sheet for Advanced Stats #####
+advanced1617 <- lastseason[c(2,3,5)]
+
+# note: we must create statements that allow us to divide raw player data by aggregate team data
+# we'll use the 'with' function
+
+## rebound rate ##
+# create column for rebound rate
+advanced1617$ReboundShares <- percent(pergame1617$Rebounds / pergame1617$TeamRebounds)
+
+
+## usage rate ##
+advanced1617$UsageRate <- round((pergame1617$FieldGoalsAttempted +
+                                    0.44 * pergame1617$FreeThrowsAttempted + pergame1617$Turnovers) *
+                                   (pergame1617$TeamMinutes/5) / 
+                                   (pergame1617$Minutes * (pergame1617$TeamFieldGoalsAttempted +
+                                                             0.44 * pergame1617$TeamFreeThrowsAttempted +
+                                                             pergame1617$TeamTurnovers)), digits=2)
+
+## true shooting percentage ##
+advanced1617$TrueShootingPercentage <- round(pergame1617$Points / (2 * 
+                                                               (pergame1617$FieldGoalsAttempted +
+                                                               0.44 * pergame1617$FreeThrowsAttempted)), digits = 2)
+
+## usage * true shooting ##
+advanced1617$Efficient.Usage <- (advanced1617$UsageRate * advanced1617$TrueShootingPercentage)
+
+
+#### Display Stats ####
+
+# all stats
+head(pergame1617)
+head(advanced1617)
+
+# arrange by usage
+arrange(advanced1617, desc(UsageRate), desc(TrueShootingPercentage))
+
+# arrange by efficient usage
+arrange(advanced1617, desc(Efficient.Usage))
+
+# find specific player by name (if record contains specific string under Name column)
+advanced1617[grep("Hollis", advanced1617$Name),]
+pergame1617[grep("Warren", pergame1617$Name),]
+
